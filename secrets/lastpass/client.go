@@ -171,12 +171,7 @@ func (c *Client) requestIterationCount(username string) (int, error) {
 		return 0, err
 	}
 
-	count, err := strconv.Atoi(string(responseBytes))
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
+	return strconv.Atoi(string(responseBytes))
 }
 
 func makeKey(username, password string, iterationCount int) []byte {

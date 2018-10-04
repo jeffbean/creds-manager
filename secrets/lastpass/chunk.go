@@ -1,6 +1,7 @@
 package lastpass
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -14,7 +15,51 @@ var (
 	VersionChunk ChunkID = [4]byte{'L', 'P', 'A', 'V'}
 )
 
-func ReadItem(r io.Reader) ([]byte, error) {
+type Chunk interface {
+	GetID() ChunkID
+	ReadFields() ([]Field, error)
+}
+
+type Field []byte
+
+type chunk struct {
+	id   ChunkID
+	data []byte
+}
+
+// ReadFields reads all the fields out of a chunk
+// the returned slice of fields will vary from the type of Chunk it is
+// and is up to the caller on how the layout of the fields is parsed
+func (c *chunk) ReadFields() ([]Field, error) {
+	r := bytes.NewReader(c.data)
+	fields := make([]Field, 0)
+	for {
+		field, err := readField(r)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		fields = append(fields, field)
+	}
+
+	return fields, nil
+}
+
+func (c *chunk) GetID() ChunkID {
+	return c.id
+}
+
+func readField(r io.Reader) (Field, error) {
+	data, err := readItem(r)
+	if err != nil {
+		return nil, err
+	}
+	return Field(data), nil
+}
+
+func readItem(r io.Reader) ([]byte, error) {
 	size, err := readUint32(r)
 	if err != nil {
 		return nil, err
@@ -27,11 +72,6 @@ func ReadItem(r io.Reader) ([]byte, error) {
 	}
 
 	return b[:n], nil
-}
-
-type chunk struct {
-	id   ChunkID
-	data []byte
 }
 
 func parseChunks(r io.Reader) ([]*chunk, error) {
@@ -60,7 +100,7 @@ func readChunk(r io.Reader) (*chunk, error) {
 		return nil, err
 	}
 
-	data, err := ReadItem(r)
+	data, err := readItem(r)
 	if err != nil {
 		return nil, err
 	}

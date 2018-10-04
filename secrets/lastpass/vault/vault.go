@@ -1,14 +1,14 @@
 package vault
 
 import (
-	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"errors"
 	"fmt"
-	"io"
+	"log"
 
-	"github.com/jeffbean/creds-manager/secrets"
+	"github.com/jeffbean/creds-manager/api"
 	"github.com/jeffbean/creds-manager/secrets/lastpass"
 )
 
@@ -42,23 +42,25 @@ func NewVault(blob *lastpass.Blob, encryptionKey []byte) (*Vault, error) {
 	return &Vault{Version: blob.Version, Cipher: cipher, Accounts: accounts}, nil
 }
 
-func (v *Vault) Load(ctx context.Context, name string) *secrets.Secret {
+// Load take a secret name and returns the secret with that name, if found
+func (v *Vault) Load(ctx context.Context, name string) *api.Secret {
 	for _, a := range v.Accounts {
 		if a.Name == name {
-			return &secrets.Secret{Name: name, Value: a}
+			return &api.Secret{Name: name, Value: a}
 		}
 	}
 	return nil
 }
 
-func (v *Vault) Save(ctx context.Context, s *secrets.Secret) error {
-	return nil
+// Save is not implemented for lastpass
+func (v *Vault) Save(ctx context.Context, s *api.Secret) error {
+	return errors.New("Save not implemented for lastpass")
 }
 
-func parseAccounts(accountChunks [][]byte, c cipher.Block) ([]*lastpass.Account, error) {
+func parseAccounts(accountChunks []lastpass.Chunk, c cipher.Block) ([]*lastpass.Account, error) {
 	accounts := make([]*lastpass.Account, 0)
 	for _, accountChunk := range accountChunks {
-		acct, err := parseAccount(bytes.NewReader(accountChunk), c)
+		acct, err := parseAccount(accountChunk, c)
 		if err != nil {
 			return nil, err
 		}
@@ -67,67 +69,37 @@ func parseAccounts(accountChunks [][]byte, c cipher.Block) ([]*lastpass.Account,
 	return accounts, nil
 }
 
-func parseAccount(reader io.Reader, c cipher.Block) (*lastpass.Account, error) {
-	id, err := lastpass.ReadItem(reader)
+func parseAccount(chunk lastpass.Chunk, c cipher.Block) (*lastpass.Account, error) {
+	// TODO: reading fields is a little it weird but i like the fact the chunk can just be read holistically
+	fields, err := chunk.ReadFields()
 	if err != nil {
 		return nil, err
 	}
-	name, err := lastpass.ReadItem(reader)
-	if err != nil {
-		return nil, err
-	}
-	decryptedName, err := decryptField(name, c)
-	if err != nil {
-		return nil, err
-	}
-	// group
-	if _, err := lastpass.ReadItem(reader); err != nil {
-		return nil, err
-	}
-
-	// url
-	if _, err := lastpass.ReadItem(reader); err != nil {
-		return nil, err
-	}
-
-	// notes
-	if _, err := lastpass.ReadItem(reader); err != nil {
-		return nil, err
-	}
-
-	for i := 0; i < 2; i++ {
-		// skips
-		if _, err := lastpass.ReadItem(reader); err != nil {
-			return nil, err
+	if len(fields) < 8 {
+		for _, f := range fields {
+			log.Printf("%v\n", f)
 		}
+		return nil, fmt.Errorf("failed to parse account fields expected at least 8 fields, found: %v", len(fields))
 	}
 
-	username, err := lastpass.ReadItem(reader)
+	decryptedName, err := decryptField(fields[1], c)
 	if err != nil {
 		return nil, err
 	}
-	decryptedusername, err := decryptField(username, c)
-	if err != nil {
-		return nil, err
-	}
-	password, err := lastpass.ReadItem(reader)
-	if err != nil {
-		return nil, err
-	}
-	decryptedpassword, err := decryptField(password, c)
+	decryptedpassword, err := decryptField(fields[7], c)
 	if err != nil {
 		return nil, err
 	}
 
 	return &lastpass.Account{
-		ID:       string(id),
-		Name:     string(decryptedName),
-		Username: string(decryptedusername),
+		ID:   string(fields[0]),
+		Name: string(decryptedName),
+		// Username: string(decryptedusername),
 		Password: string(decryptedpassword),
 	}, nil
 }
 
-func decryptField(field []byte, c cipher.Block) ([]byte, error) {
+func decryptField(field lastpass.Field, c cipher.Block) ([]byte, error) {
 	length := len(field)
 
 	if length == 0 {

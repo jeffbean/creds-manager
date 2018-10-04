@@ -10,8 +10,7 @@ type Blob struct {
 	Version      uint64
 	LocalVersion bool
 
-	AccountChunks [][]byte
-	AppChunks     [][]byte
+	AccountChunks []Chunk
 }
 
 // parseBlob takes in a reader to parse out the LastPass Blob.
@@ -23,13 +22,13 @@ func parseBlob(r io.Reader) (*Blob, error) {
 		return nil, err
 	}
 
-	accounts := make([][]byte, 0)
+	accounts := make([]Chunk, 0)
 	for _, chunk := range chunks {
 		switch chunk.id {
 		case VersionChunk:
 			blob.Version = parseVersion(chunk)
 		case AccountChunk:
-			accounts = append(accounts, chunk.data)
+			accounts = append(accounts, chunk)
 		}
 	}
 

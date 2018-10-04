@@ -5,38 +5,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"strings"
 
-	"github.com/jeffbean/creds-manager/secrets/lastpass/vault"
-
 	"github.com/jeffbean/creds-manager/secrets/lastpass"
-	"github.com/jeffbean/creds-manager/ssh"
+	"github.com/jeffbean/creds-manager/secrets/lastpass/vault"
 )
 
 func main() {
-	if err := runLP(); err != nil {
+	if err := run(); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func run() error {
-	keyPair, err := ssh.GenerateSSHKeyPair("foobar", ssh.RSAPrivateKey, 1024)
-	if err != nil {
-		return fmt.Errorf("failed to gen keypair: %v", err)
-	}
-
-	tmpDir, err := ioutil.TempDir("", "ssh-test")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-	fmt.Println(tmpDir)
-
-	return ssh.WriteKeysToDirectory(keyPair, tmpDir)
-}
-
-func runLP() error {
 	b, err := ioutil.ReadFile("credentials.txt")
 	if err != nil {
 		return err
