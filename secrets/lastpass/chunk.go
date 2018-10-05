@@ -60,8 +60,8 @@ func readField(r io.Reader) (Field, error) {
 }
 
 func readItem(r io.Reader) ([]byte, error) {
-	size, err := readUint32(r)
-	if err != nil {
+	var size uint32
+	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
 		return nil, err
 	}
 
@@ -74,8 +74,8 @@ func readItem(r io.Reader) ([]byte, error) {
 	return b[:n], nil
 }
 
-func parseChunks(r io.Reader) ([]*chunk, error) {
-	chunks := []*chunk{}
+func parseChunks(r io.Reader) ([]Chunk, error) {
+	chunks := []Chunk{}
 	for {
 		chunk, err := readChunk(r)
 		if err != nil {
@@ -115,13 +115,4 @@ func readChunkID(r io.Reader) (ChunkID, error) {
 	}
 
 	return b, nil
-}
-
-func readUint32(r io.Reader) (uint32, error) {
-	var b [4]byte
-	if _, err := r.Read(b[:]); err != nil {
-		return 0, err
-	}
-
-	return binary.BigEndian.Uint32(b[:]), nil
 }
