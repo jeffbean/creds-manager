@@ -10,7 +10,6 @@ import (
 	mrand "math/rand"
 
 	"golang.org/x/crypto/ed25519"
-
 	"golang.org/x/crypto/ssh"
 )
 
@@ -32,6 +31,7 @@ type KeyPair struct {
 }
 
 // GenerateSSHKeyPair creates ssh keys with a passpharse
+// TODO: since bitsize is only for some we should use Options pattern
 func GenerateSSHKeyPair(passphrase string, pt KeyType, bitSize int) (*KeyPair, error) {
 	signer, privateKeyBytes, err := generatePrivateKey(pt, bitSize)
 	if err != nil {

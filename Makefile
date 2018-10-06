@@ -1,8 +1,14 @@
 default: build test
 
-BINS = tools/ssh-helper/ssh-helper creds-manager
+BINS = tools/ssh-helper/ssh-helper \
+	tools/lptool/lptool
 
-GO_BIN_BUILD=go build -o $@
+PROJECT_ROOT = github.com/jeffbean/creds-manager
+
+GO_BIN_BUILD=go build -o $@ $(bin_main_pkg)
+
+bin_main_dir=$(abspath $(GOPATH)/$(PROJECT_ROOT)/$(dir $@))
+bin_main_pkg=$(subst $(GOPATH)/,,$(bin_main_dir))
 
 build: $(BINS)
 
@@ -15,4 +21,7 @@ $(BINS):
 tools/ssh-helper/ssh-helper: $(wildcard tools/ssh-helper/*.go \
 	ssh/*.go)
 
-creds-manager: $(wildcard **/*.go)
+tools/lptool/lptool: $(wildcard **/*.go)
+
+clean:
+	rm $(BINS)
