@@ -13,3 +13,5 @@
 
 credentials.txt
 creds-manager
+
+tools/ssh-helper/ssh-helper

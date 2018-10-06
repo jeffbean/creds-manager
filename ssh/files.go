@@ -33,7 +33,7 @@ func WriteKeysToDirectory(kp *KeyPair, directory string) error {
 	return nil
 }
 
-func encodePrivateKeyToPEM(privateKey crypto.PrivateKey, pt PemType) ([]byte, error) {
+func encodePrivateKeyToPEM(privateKey crypto.PrivateKey, pt KeyType) ([]byte, error) {
 	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
 		return nil, err

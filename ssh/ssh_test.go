@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +23,7 @@ func TestGenerateSSHKeyPair(t *testing.T) {
 	tests := []struct {
 		msg        string
 		passphrase string
-		pt         PemType
+		pt         KeyType
 
 		wantErr string
 	}{
@@ -34,7 +35,8 @@ func TestGenerateSSHKeyPair(t *testing.T) {
 		{
 			msg:        "foobar pem type",
 			passphrase: "",
-			pt:         PemType("foobar"),
+			pt:         KeyType("foobar"),
+			wantErr:    "unsupported key type: foobar",
 		},
 		{
 			msg:        "passphrase",
@@ -42,8 +44,14 @@ func TestGenerateSSHKeyPair(t *testing.T) {
 			pt:         RSAPrivateKey,
 		},
 		{
+			msg:        "ed type",
+			passphrase: "testing",
+			pt:         ED25519,
+		},
+		{
 			msg:        "no pem type",
 			passphrase: "testing",
+			wantErr:    "unsupported key type: ",
 		},
 	}
 	for _, tt := range tests {
@@ -55,11 +63,14 @@ func TestGenerateSSHKeyPair(t *testing.T) {
 
 			got, err := GenerateSSHKeyPair(tt.passphrase, tt.pt, size)
 			if tt.wantErr != "" {
-				t.Errorf("GenerateSSHKeyPair() error = %v, wantErr %v", err, tt.wantErr)
+				assert.EqualError(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
-			testKeyBasics(t, got.PrivateKey.(*rsa.PrivateKey))
+			switch got.PrivateKey.(type) {
+			case *rsa.PrivateKey:
+				testKeyBasics(t, got.PrivateKey.(*rsa.PrivateKey))
+			}
 		})
 	}
 }
