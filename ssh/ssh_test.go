@@ -61,7 +61,7 @@ func TestGenerateSSHKeyPair(t *testing.T) {
 				size = 128
 			}
 
-			got, err := GenerateSSHKeyPair(tt.passphrase, tt.pt, size)
+			got, err := GenerateSSHKeyPair(tt.pt, size)
 			if tt.wantErr != "" {
 				assert.EqualError(t, err, tt.wantErr)
 				return

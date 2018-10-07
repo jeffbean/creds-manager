@@ -4,8 +4,6 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	mrand "math/rand"
 
@@ -24,68 +22,52 @@ const (
 
 // KeyPair is a private and public set pf keys intended for creating ssh keys
 type KeyPair struct {
-	PemType KeyType
-
-	PrivateKey crypto.Signer
+	KeyType    KeyType
+	PrivateKey crypto.PrivateKey
 	PublicKey  ssh.PublicKey
 }
 
 // GenerateSSHKeyPair creates ssh keys with a passpharse
 // TODO: since bitsize is only for some we should use Options pattern
-func GenerateSSHKeyPair(passphrase string, pt KeyType, bitSize int) (*KeyPair, error) {
-	signer, privateKeyBytes, err := generatePrivateKey(pt, bitSize)
+func GenerateSSHKeyPair(kt KeyType, bitSize int) (*KeyPair, error) {
+	privateKey, err := generatePrivateKey(kt, bitSize)
 	if err != nil {
 		return nil, err
 	}
 
-	publicKey, err := ssh.NewPublicKey(signer.Public())
+	publicKey, err := sshPublic(privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new public key: %v", err)
 	}
 
-	// private := privateKey
-	block := &pem.Block{
-		Type:  string(pt),
-		Bytes: privateKeyBytes,
-	}
-
-	block, err = x509.EncryptPEMBlock(rand.Reader, block.Type, block.Bytes, []byte(passphrase), x509.PEMCipherAES256)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt pem block: %v", err)
-	}
-
 	return &KeyPair{
-		PrivateKey: signer,
+		KeyType:    kt,
+		PrivateKey: privateKey,
 		PublicKey:  publicKey,
-		PemType:    pt,
 	}, nil
 }
 
-func generatePrivateKey(kt KeyType, bitSize int) (crypto.Signer, []byte, error) {
-	var (
-		privateKey      crypto.Signer
-		privateKeyBytes []byte
-	)
+func sshPublic(k crypto.PrivateKey) (ssh.PublicKey, error) {
+	return ssh.NewPublicKey(k.(crypto.Signer).Public())
+}
+
+func generatePrivateKey(kt KeyType, bitSize int) (crypto.PrivateKey, error) {
 	switch kt {
 	case RSAPrivateKey:
 		rsaKey, err := generateRSAPrivateKey(bitSize)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create rsa key: %v", err)
+			return nil, fmt.Errorf("failed to create rsa key: %v", err)
 		}
-		privateKeyBytes = x509.MarshalPKCS1PrivateKey(rsaKey)
-		privateKey = rsaKey
+		return rsaKey, nil
 	case ED25519:
-		edPub, edKey, err := ed25519.GenerateKey(rand.Reader)
+		_, edKey, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create ed25519 key: %v", err)
+			return nil, fmt.Errorf("failed to create ed25519 key: %v", err)
 		}
-		privateKeyBytes = marshalED25519PrivateKey(edPub, edKey)
-		privateKey = edKey
+		return &edKey, nil
 	default:
-		return nil, nil, fmt.Errorf("unsupported key type: %v", kt)
+		return nil, fmt.Errorf("unsupported key type: %v", kt)
 	}
-
-	return privateKey, privateKeyBytes, nil
 }
 
 func generateRSAPrivateKey(bitSize int) (*rsa.PrivateKey, error) {
@@ -103,7 +85,8 @@ func generateRSAPrivateKey(bitSize int) (*rsa.PrivateKey, error) {
 
 // Reversed engineered from the golang ssh library: https://github.com/golang/crypto/blob/master/ssh/keys.go#L905
 // no guarantees :D
-func marshalED25519PrivateKey(pubKey ed25519.PublicKey, key ed25519.PrivateKey) []byte {
+func marshalED25519PrivateKey(key *ed25519.PrivateKey, comment string) []byte {
+	pubKey := key.Public().(ed25519.PublicKey)
 	// Per RFC: https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.key
 	magic := append([]byte("openssh-key-v1"), 0)
 
@@ -123,13 +106,13 @@ func marshalED25519PrivateKey(pubKey ed25519.PublicKey, key ed25519.PrivateKey) 
 		Check2:  check,
 		Keytype: ssh.KeyAlgoED25519,
 		Pub:     []byte(pubKey),
-		Priv:    []byte(key),
-		Comment: "",
+		Priv:    []byte(*key),
+		Comment: comment,
 	}
 
 	// Add some padding to match the encryption block size within PrivKeyBlock (without Pad field)
 	// the openssh doc says 255 so we just use that i guess
-	blockSize := 255
+	blockSize := 8
 	blockLen := len(ssh.Marshal(pk1))
 	padLen := (blockSize - (blockLen % blockSize)) % blockSize
 
